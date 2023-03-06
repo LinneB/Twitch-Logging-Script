@@ -10,6 +10,8 @@ import requests
 nickname = 'USERNAME'
 token = 'OAUTH TOKEN'
 channel = '#CHANNEL'
+clientID = 'clientid'
+apptoken = "token"
 
 cnx_pool = mysql.connector.pooling.MySQLConnectionPool(
     host="",
@@ -89,12 +91,8 @@ live = False
 def online_check():
     global live
 
-    # Insert your app access token from twitch here 
-    token = "token"
-    clientID = "clientid"
-
     headers = {
-        'Authorization': f'Bearer {token}',
+        'Authorization': f'Bearer {apptoken}',
         'Client-ID': f'{clientID}'
     }
     while True:
