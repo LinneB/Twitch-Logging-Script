@@ -117,7 +117,6 @@ online_thread.start()
 
 sock = connect_to_server()
 
-regex = re.compile(r":(\w+)!\w+@\w+\.tmi\.twitch\.tv PRIVMSG #\w+ :(.+)")
 while True:
     ready = select.select([sock], [], [], 10)
     if ready[0]:
