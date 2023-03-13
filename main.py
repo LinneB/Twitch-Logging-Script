@@ -6,12 +6,16 @@ from time import sleep
 import re
 import select
 import requests
+from datetime import datetime
 
 nickname = 'USERNAME'
 token = 'OAUTH TOKEN'
 channel = '#CHANNEL'
 clientID = 'clientid'
 apptoken = "token"
+
+message_queue = queue.Queue()
+unprocessedqueue = queue.Queue()
 
 cnx_pool = mysql.connector.pooling.MySQLConnectionPool(
     host="",
@@ -22,9 +26,6 @@ cnx_pool = mysql.connector.pooling.MySQLConnectionPool(
 
 server = 'irc.chat.twitch.tv'
 port = 6667
-
-message_queue = queue.Queue()
-unprocessedqueue = queue.Queue()
 
 def send_message(sock, message):
     sock.send((message + "\r\n").encode())
@@ -55,9 +56,7 @@ def write_to_database(message_queue):
               "VALUES (%s, %s, %s)")
             record_data = (live, username, message)
             cursor.execute(add_record, record_data)
-
             print(f"Inserting: {live}, {username}, {message}")
-
             cnx.commit()
 
             cursor.close()
@@ -75,11 +74,12 @@ def process_messages(unprocessedqueue):
             if data.startswith("PING"):
                 send_message(sock, "PONG :tmi.twitch.tv")
             else:
+                # Extract the username and message from the chat data
                 match = regex.search(data)
                 if match:
                     username, message = match.group(1, 2)
                     message_queue.put((username, message, live))
-
+                    #print(f"{username}: {message}")
                 else:
                     print(f"No match found: {data}")
         else:
@@ -90,7 +90,6 @@ live = False
 
 def online_check():
     global live
-
     headers = {
         'Authorization': f'Bearer {apptoken}',
         'Client-ID': f'{clientID}'
@@ -112,13 +111,25 @@ sql_thread.start()
 process_thread = threading.Thread(target=process_messages, args=(unprocessedqueue,))
 process_thread.start()
 
-online_thread = threading.Thread(target=online_check,)
-online_thread.start()
+api_thread = threading.Thread(target=online_check,)
+api_thread.start()
 
 sock = connect_to_server()
 
+regex = re.compile(r":(\w+)!\w+@\w+\.tmi\.twitch\.tv PRIVMSG #\w+ :(.+)")
 while True:
-    ready = select.select([sock], [], [], 10)
-    if ready[0]:
-        data = sock.recv(65536).decode("utf-8")
-        unprocessedqueue.put(data)
+    try:
+        ready = select.select([sock], [], [], 10)
+        if ready[0]:
+            data = sock.recv(65536).decode("utf-8")
+            unprocessedqueue.put(data)
+    except:
+        print("Lost connection to server, attempting to reconnect...")
+        now = datetime.now()
+        current_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
+        with open("logs.txt", "a") as f:
+            f.write(f"{current_datetime}: Socket connection threw exception\n")
+        try:
+            sock = connect_to_server()
+        except:
+            sleep(10)
